@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="AiAgentAspireApp.ApiService/AiAgentAspireApp.ApiService.csproj" />
+  <Project Path="AiAgentAspireApp.AppHost/AiAgentAspireApp.AppHost.csproj" />
+  <Project Path="AiAgentAspireApp.ServiceDefaults/AiAgentAspireApp.ServiceDefaults.csproj" />
+  <Project Path="AiAgentAspireApp.Web/AiAgentAspireApp.Web.csproj" />
+  <Project Path="PrductApi/PrductApi.csproj" />
+</Solution>

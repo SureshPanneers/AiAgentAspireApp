@@ -1,0 +1,184 @@
+﻿@page "/aichat"
+@rendermode InteractiveServer
+@using System.Text
+@using Markdig
+@using Microsoft.Agents.AI
+@using Microsoft.Agents.AI.Workflows
+@using Microsoft.Extensions.AI
+@using System.ComponentModel
+
+@inject IChatClient ChatClient
+
+<h3> Agent Chat using Microsoft Agent Framework </h3>
+
+<div class="chat-container">
+    <div class="chat-messages" @ref="messagesContainer">
+        @foreach (var message in Messages)
+        {
+             <div class="message @(message.IsUser ? "user-message" : "ai-message")">
+                @((MarkupString)Markdown.ToHtml(message.Content))
+            </div> 
+        }
+    </div>
+
+    <div class="chat-input-area">
+        <input type="text"
+               @bind="userInput"
+               @bind:event="oninput"
+               @onkeyup="HandleKeyUp"
+               placeholder="Type your message..."
+               class="chat-input" />
+        <button @onclick="SendMessage" class="send-button" disabled="@isStreaming">Send</button>
+    </div>
+</div>
+
+@code {
+    private MarkupString responseText;
+    private string userInput = string.Empty;
+    private ElementReference messagesContainer;
+    private List<ChatMessageModel> Messages = new List<ChatMessageModel>();
+    private bool isStreaming = false;
+
+    private class ChatMessageModel
+    {
+        public string Content { get; set; }
+        //public MarkupString Content { get; set; }
+        public bool IsUser { get; set; }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(userInput) || isStreaming) return;
+
+        // Add user message
+        Messages.Add(new ChatMessageModel
+        {
+            Content = userInput,
+            IsUser = true
+        });
+
+        // Prepare AI response container
+        var aiResponse = new StringBuilder();
+        var testResponse = string.Empty;
+        Messages.Add(new ChatMessageModel
+        {
+            Content = "",
+            IsUser = false
+        });
+
+        // crate writer agent.
+        AIAgent writer = new ChatClientAgent(ChatClient,
+            name: "Writer",
+        instructions:
+              """
+    You are a **master storyteller and creative writing assistant**.
+    Your job is to craft immersive, emotionally engaging, and well-paced stories based on the user’s prompt.
+
+    ✅ Guidelines:
+    - Build strong, relatable characters with depth and motivation.
+    - Create vivid scenes that appeal to all senses.
+    - Maintain smooth pacing and logical progression.
+    - Use natural dialogue and tone suited to the story’s genre.
+    - End each story with impact or reflection.
+    - After writing, format the story neatly using Markdown with clear headings, spacing, and emphasis.
+
+    🎯 Your goal: Hook the reader in the first few lines, keep them emotionally invested, and leave a lasting impression.
+    """,
+           tools: [ AIFunctionFactory.Create(GetAuthor),
+            AIFunctionFactory.Create(FormatStory)]);
+
+		//create editer agent.
+        AIAgent editor = new ChatClientAgent(ChatClient,
+            name: "Editor",
+        instructions:
+               """
+    You are a **professional literary editor and style enhancer**.
+    Your task is to refine the writer’s draft into a polished, publication-ready piece.
+
+    ✅ Editing Focus:
+    - Improve clarity, flow, and emotional resonance.
+    - Strengthen sentence rhythm and word choice.
+    - Ensure consistency in tone, tense, and perspective.
+    - Fix grammar, punctuation, and formatting issues.
+    - Preserve the author’s voice while elevating readability and impact.
+
+    🪄 Output Requirements:
+    1. Provide **4–8 specific, concise recommendations** explaining how to improve the story.
+    2. Present a **fully revised version** of the story in **Markdown format**, ready for publication.
+
+    🎯 Your goal: Make the story shine — clear, coherent, emotionally gripping, and stylistically beautiful.
+    """
+          );
+
+
+
+        try
+        {
+            isStreaming = true;
+
+               Workflow workflow =
+       AgentWorkflowBuilder
+           .CreateGroupChatBuilderWith(agents =>
+               new AgentWorkflowBuilder.RoundRobinGroupChatManager(agents)
+               {
+                   MaximumIterationCount = 2
+               })
+           .AddParticipants(writer, editor)
+           .Build();
+
+           AIAgent workflowAgent = await workflow.AsAgentAsync();
+
+            // Stream AI response
+            await foreach (var chunk in workflowAgent.RunStreamingAsync(new ChatMessage[]
+            {
+                new ChatMessage(ChatRole.User, userInput)
+            }))
+            {
+                if (chunk?.Text != null)
+                {
+                    testResponse += chunk.Text;
+                    aiResponse.Append(chunk.Text);
+                    Messages[^1].Content = aiResponse.ToString();
+                    await InvokeAsync(StateHasChanged);
+                   await ScrollToBottom();
+                }
+                
+            }
+        }
+        catch (Exception ex)
+        {
+            Messages[^1].Content = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isStreaming = false;
+            userInput = string.Empty;
+        }
+    }
+
+
+    private async Task ScrollToBottom()
+    {
+        await JSRuntime.InvokeVoidAsync("scrollToBottom", messagesContainer);
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isStreaming)
+        {
+            await SendMessage();
+        }
+    }
+
+    // Inject JavaScript for scrolling
+    [Inject] private IJSRuntime JSRuntime { get; set; }
+
+
+    [Description("Gets the author of the story.")]
+    string GetAuthor() => "Jack Torrance";
+
+    [Description("Formats the story for display.")]
+    string FormatStory(string title, string author, string story) =>
+        $"Title: {title}\nAuthor: {author}\n\n{story}";
+  
+}
