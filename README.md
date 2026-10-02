@@ -156,7 +156,7 @@ All cross-service traffic from the web app goes through the **YARP gateway**, wh
 - Agent responses are rendered as Markdown→HTML (`MarkupString`) in the Blazor pages; treat this as a sample pattern, not a hardened one, if model output could ever include untrusted content.
 - Package versions for `Microsoft.Agents.AI*` differ slightly between the API and web projects and are preview releases.
 
-## Web App Pages output on execution try with the chat prompts.
+## Application execution screen output with the chat prompts responses.
 
 <img width="1904" height="1149" alt="image" src="https://github.com/user-attachments/assets/bc821c60-e342-404b-8a36-a9ce273802d9" />
 <img width="1907" height="1106" alt="image (1)" src="https://github.com/user-attachments/assets/873d7302-e0c2-4411-a4d7-6e64269e54bf" />
